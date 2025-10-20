@@ -138,7 +138,7 @@ def train(attn_implementation="flash_attention_2"):
     local_rank = training_args.local_rank
     os.makedirs(training_args.output_dir, exist_ok=True)
 
-    if "qwen3" in model_args.model_name_or_path.lower() and "a" in model_args.model_name_or_path.lower():
+    if "qwen3" in model_args.model_name_or_path.lower() and "a" in Path(model_args.model_name_or_path.rstrip("/")).name.lower():
         model = Qwen3VLMoeForConditionalGeneration.from_pretrained(
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
@@ -222,11 +222,12 @@ def train(attn_implementation="flash_attention_2"):
     else:
         trainer.train()
     trainer.save_state()
-    processor.save_pretrained(training_args.output_dir)
 
     model.config.use_cache = True
 
     safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
+    
+    processor.save_pretrained(training_args.output_dir)
 
 
 if __name__ == "__main__":
