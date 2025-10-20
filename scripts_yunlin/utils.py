@@ -47,7 +47,7 @@ def load_model():
     return model, processor
 
 
-def run_inference(model, processor, prompt_text, image_dir=None, image_paths=None, verbose=True):
+def run_inference(model, processor, prompt_text, image_dir=None, image_paths=None, verbose=True, seed=None):
     """
     Run inference with the loaded model
 
@@ -58,10 +58,18 @@ def run_inference(model, processor, prompt_text, image_dir=None, image_paths=Non
         image_dir: Directory containing images (default: story_6228) - deprecated, use image_paths
         image_paths: List of Path objects to 5 images (preferred)
         verbose: Print detailed progress info
+        seed: Random seed for reproducibility (default: None = non-deterministic)
 
     Returns:
         tuple: (output_text, timing_info) or (None, None) on error
     """
+
+    # Set seed for reproducibility if provided
+    if seed is not None:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        if verbose:
+            print(f"✓ Random seed set to: {seed}")
 
     start_time = time.time()
 
