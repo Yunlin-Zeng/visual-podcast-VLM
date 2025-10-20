@@ -33,6 +33,7 @@ from transformers import (
     Qwen3VLForConditionalGeneration,
     Qwen3VLMoeForConditionalGeneration
 )
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from qwenvl.data.data_processor import make_supervised_data_module
 from qwenvl.train.argument import (
     ModelArguments,
@@ -87,6 +88,43 @@ def set_model(model_args, model):
         for n, p in model.language_model.named_parameters():
             p.requires_grad = False
         model.lm_head.requires_grad = False
+
+
+def apply_lora(model_args, model):
+    """Apply LoRA to the language model"""
+    if not model_args.use_lora:
+        return model
+
+    rank0_print("Applying LoRA configuration...")
+
+    # Parse target modules
+    target_modules = model_args.lora_target_modules.split(",")
+
+    # LoRA configuration
+    lora_config = LoraConfig(
+        r=model_args.lora_r,
+        lora_alpha=model_args.lora_alpha,
+        target_modules=target_modules,
+        lora_dropout=model_args.lora_dropout,
+        bias="none",
+        task_type="CAUSAL_LM",
+        modules_to_save=["visual.merger"] if model_args.tune_mm_mlp else None,
+    )
+
+    # Freeze all parameters first
+    for param in model.parameters():
+        param.requires_grad = False
+
+    # Apply LoRA
+    model = get_peft_model(model, lora_config)
+
+    # Manually enable MLP merger if needed
+    if model_args.tune_mm_mlp:
+        for n, p in model.base_model.model.visual.merger.named_parameters():
+            p.requires_grad = True
+
+    rank0_print("LoRA applied successfully")
+    return model
 
 
 def train(attn_implementation="flash_attention_2"):
@@ -159,11 +197,19 @@ def train(attn_implementation="flash_attention_2"):
         padding_side="right",
         use_fast=False,
     )
-    set_model(model_args, model)
+
+    # Apply LoRA if enabled, otherwise use standard fine-tuning
+    if model_args.use_lora:
+        model = apply_lora(model_args, model)
+    else:
+        set_model(model_args, model)
 
     if torch.distributed.get_rank() == 0:
-        model.visual.print_trainable_parameters()
-        model.model.print_trainable_parameters()
+        if hasattr(model, 'print_trainable_parameters'):
+            model.print_trainable_parameters()
+        else:
+            model.visual.print_trainable_parameters()
+            model.model.print_trainable_parameters()
     
     data_module = make_supervised_data_module(processor, data_args=data_args)
     trainer = Trainer(

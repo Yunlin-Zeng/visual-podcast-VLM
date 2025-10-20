@@ -26,12 +26,19 @@ VIDEOCHATGPT = {
     "data_path": "PATH_TO_VIDEOCHATGPT_DATA",
 }
 
+# Custom dataset: Podcast transcript generation training data
+PODCAST_QWEN_LORA = {
+    "annotation_path": "/home/ubuntu/image-to-text/data/2025-10-16_prompt_templates_tune_qwen3_vl/qwen_training_data.json",
+    "data_path": "",  # Empty because image paths are absolute in annotation
+}
+
 data_dict = {
     "cambrian_737k": CAMBRIAN_737K,
     "cambrian_737k_pack": CAMBRIAN_737K_PACK,
     "mp_doc": MP_DOC,
     "clevr_mc": CLEVR_MC,
     "videochatgpt": VIDEOCHATGPT,
+    "podcast_qwen_lora": PODCAST_QWEN_LORA,
 }
 
 
