@@ -9,8 +9,16 @@ from pathlib import Path
 import time
 
 
-def load_model():
-    """Load Qwen3-VL model once and keep in memory"""
+def load_model(lora_adapter_path=None):
+    """
+    Load Qwen3-VL model once and keep in memory
+
+    Args:
+        lora_adapter_path: Optional path to LoRA adapter weights to load on top of base model
+
+    Returns:
+        tuple: (model, processor)
+    """
     print("=" * 80)
     print("Loading Qwen3-VL-235B-A22B-Instruct model...")
     print("=" * 80)
@@ -20,7 +28,7 @@ def load_model():
     # Force distribution across all 8 GPUs using max_memory
     max_memory = {i: "70GB" for i in range(8)}
 
-    print("Loading model with multi-GPU distribution...")
+    print("Loading base model with multi-GPU distribution...")
     model = AutoModelForImageTextToText.from_pretrained(
         model_path,
         dtype=torch.bfloat16,
@@ -28,6 +36,13 @@ def load_model():
         max_memory=max_memory,  # Force model splitting across 8 GPUs
         trust_remote_code=True
     )
+
+    # Load LoRA adapter if provided
+    if lora_adapter_path is not None:
+        print(f"\nLoading LoRA adapter from: {lora_adapter_path}")
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, lora_adapter_path)
+        print("✓ LoRA adapter loaded and attached to base model")
 
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
 

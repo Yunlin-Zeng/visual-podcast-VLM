@@ -17,7 +17,7 @@ from utils import load_model, run_inference
 
 
 def inference_interactive(model, processor):
-    """Interactive mode for testing prompts"""
+    """Interactive mode for testing prompts with custom images"""
 
     # Predefined prompts for quick testing
     prompts = {
@@ -40,6 +40,10 @@ def inference_interactive(model, processor):
         "5": {
             "name": "Cinematic & calm",
             "text": "Please generate a transcript in a cinematic style, with a calm tone, in podcast format, with length between 600-700 words, and elaborate detail level.\n\nPlease generate a podcast transcript based on these images."
+        },
+        "c": {
+            "name": "Custom prompt",
+            "text": ""
         }
     }
 
@@ -48,13 +52,60 @@ def inference_interactive(model, processor):
     print("=" * 80)
     print("\nAvailable prompts:")
     for key, prompt in prompts.items():
-        print(f"  {key}. {prompt['name']}")
+        if key != "c":
+            print(f"  {key}. {prompt['name']}")
     print("  c. Custom prompt")
     print("  q. Quit")
 
     while True:
+        print("\n" + "=" * 80)
+        print("NEW INFERENCE SESSION")
+        print("=" * 80)
+
+        # Step 1: Get image paths
+        print("\nEnter 5 image paths (one per line)")
+        print("Or press Enter to use default test images")
+        print("Examples:")
+        print("  /home/ubuntu/image-to-text/data/visual_storytelling/images/test/1741642.jpg")
+        print()
+
+        image_paths = []
+        use_default = False
+
+        first_input = input("Image 1 (or press Enter for default): ").strip()
+        if first_input == "":
+            use_default = True
+            print("✓ Using default test images (story_6228)")
+            image_paths = None
+        else:
+            # Got first image, continue collecting 4 more
+            path1 = Path(first_input)
+            if not path1.exists():
+                print(f"❌ File not found: {path1}")
+                continue
+            image_paths.append(path1)
+
+            # Get remaining 4 images
+            for i in range(2, 6):
+                while True:
+                    path_input = input(f"Image {i}: ").strip()
+                    if path_input.lower() == 'q':
+                        print("Exiting...")
+                        return
+
+                    path = Path(path_input)
+                    if path.exists():
+                        image_paths.append(path)
+                        break
+                    else:
+                        print(f"  ❌ File not found: {path}")
+                        print(f"  Please enter a valid path")
+
+            print(f"\n✓ Using {len(image_paths)} custom images")
+
+        # Step 2: Get prompt
         print("\n" + "-" * 80)
-        choice = input("\nSelect prompt (1-5, c, or q): ").strip().lower()
+        choice = input("\nSelect prompt (1-5, c for custom, or q to quit): ").strip().lower()
 
         if choice == 'q':
             print("Exiting...")
@@ -69,7 +120,7 @@ def inference_interactive(model, processor):
                     break
                 lines.append(line)
             prompt_text = "\n".join(lines)
-        elif choice in prompts:
+        elif choice in prompts and choice != 'c':
             prompt_text = prompts[choice]["text"]
             print(f"\nUsing: {prompts[choice]['name']}")
         else:
@@ -83,7 +134,12 @@ def inference_interactive(model, processor):
         print(prompt_text)
 
         # Run inference
-        output, timing = run_inference(model, processor, prompt_text, verbose=True)
+        if image_paths is None:
+            # Use default images
+            output, timing = run_inference(model, processor, prompt_text, verbose=True)
+        else:
+            # Use custom images
+            output, timing = run_inference(model, processor, prompt_text, image_paths=image_paths, verbose=True)
 
         if output:
             print("\n" + "=" * 80)
@@ -101,9 +157,20 @@ def inference_interactive(model, processor):
                 if not filename:
                     filename = "output.txt"
                 with open(filename, 'w') as f:
+                    if image_paths:
+                        f.write("IMAGES:\n")
+                        for i, p in enumerate(image_paths, 1):
+                            f.write(f"  {i}. {p}\n")
+                        f.write("\n")
                     f.write(f"PROMPT:\n{prompt_text}\n\n")
                     f.write(f"OUTPUT:\n{output}\n")
                 print(f"✓ Saved to {filename}")
+
+        # Ask if continue
+        cont = input("\nRun another inference? (y/n): ").strip().lower()
+        if cont != 'y':
+            print("Exiting...")
+            break
 
 
 def inference_mass(model, processor, start_idx=0):
@@ -258,6 +325,60 @@ def inference_mass(model, processor, start_idx=0):
         print(f"  - Total generation time: {total_time/60:.1f} minutes")
 
 
+def inference(images, prompt, model=None, processor=None, model_path=None):
+    """
+    Simple inference function for single prediction
+
+    Args:
+        images: List of 5 image paths (Path objects or strings)
+        prompt: Text prompt string
+        model: Pre-loaded model (optional, will load if not provided)
+        processor: Pre-loaded processor (optional, will load if not provided)
+        model_path: Path to model if loading (defaults to base model or can be merged model)
+
+    Returns:
+        str: Generated text output
+    """
+    # Load model if not provided
+    if model is None or processor is None:
+        if model_path is None:
+            model, processor = load_model()
+        else:
+            # Load custom model (e.g., merged LoRA model)
+            print(f"Loading model from: {model_path}")
+            from transformers import AutoModelForImageTextToText
+            import torch
+
+            max_memory = {i: "70GB" for i in range(8)}
+            model = AutoModelForImageTextToText.from_pretrained(
+                model_path,
+                dtype=torch.bfloat16,
+                device_map="auto",
+                max_memory=max_memory,
+                trust_remote_code=True
+            )
+            from transformers import AutoProcessor
+            processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+            processor.image_processor.size = {
+                "longest_edge": 512 * 32 * 32,
+                "shortest_edge": 256 * 32 * 32
+            }
+
+    # Convert to Path objects if strings
+    image_paths = [Path(img) if isinstance(img, str) else img for img in images]
+
+    # Run inference
+    output, timing = run_inference(
+        model,
+        processor,
+        prompt,
+        image_paths=image_paths,
+        verbose=False
+    )
+
+    return output
+
+
 def main():
     """Main entry point with argument parsing"""
 
@@ -272,6 +393,12 @@ def main():
         help="Inference mode: 'interactive' for testing, 'mass' for batch generation"
     )
     parser.add_argument(
+        "--lora-adapter",
+        type=str,
+        default=None,
+        help="Path to LoRA adapter to load on top of base model (e.g., finetuned_models/my-lora-adapter)"
+    )
+    parser.add_argument(
         "--start-idx",
         type=int,
         default=0,
@@ -280,8 +407,9 @@ def main():
 
     args = parser.parse_args()
 
-    # Load model once
-    model, processor = load_model()
+    # Load model once (base model + optional LoRA adapter)
+    print("Loading model...")
+    model, processor = load_model(lora_adapter_path=args.lora_adapter)
 
     # Run selected mode
     if args.mode == "interactive":
