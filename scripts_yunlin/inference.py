@@ -16,8 +16,14 @@ from datetime import datetime
 from utils import load_model, run_inference
 
 
-def inference_interactive(model, processor):
-    """Interactive mode for testing prompts with custom images"""
+def inference_interactive(model, processor, seed=None):
+    """Interactive mode for testing prompts with custom images
+
+    Args:
+        model: Loaded model
+        processor: Loaded processor
+        seed: Random seed for reproducibility (None = non-deterministic)
+    """
 
     # Predefined prompts for quick testing
     prompts = {
@@ -136,10 +142,10 @@ def inference_interactive(model, processor):
         # Run inference
         if image_paths is None:
             # Use default images
-            output, timing = run_inference(model, processor, prompt_text, verbose=True)
+            output, timing = run_inference(model, processor, prompt_text, verbose=True, seed=seed)
         else:
             # Use custom images
-            output, timing = run_inference(model, processor, prompt_text, image_paths=image_paths, verbose=True)
+            output, timing = run_inference(model, processor, prompt_text, image_paths=image_paths, verbose=True, seed=seed)
 
         if output:
             print("\n" + "=" * 80)
@@ -399,6 +405,12 @@ def main():
         help="Path to LoRA adapter to load on top of base model (e.g., finetuned_models/my-lora-adapter)"
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducible results (default: None = non-deterministic)"
+    )
+    parser.add_argument(
         "--start-idx",
         type=int,
         default=0,
@@ -411,9 +423,14 @@ def main():
     print("Loading model...")
     model, processor = load_model(lora_adapter_path=args.lora_adapter)
 
+    # Store seed for use in inference
+    global_seed = args.seed
+    if global_seed is not None:
+        print(f"✓ Random seed set to: {global_seed}")
+
     # Run selected mode
     if args.mode == "interactive":
-        inference_interactive(model, processor)
+        inference_interactive(model, processor, seed=global_seed)
     elif args.mode == "mass":
         inference_mass(model, processor, start_idx=args.start_idx)
 

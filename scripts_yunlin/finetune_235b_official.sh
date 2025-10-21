@@ -71,7 +71,7 @@ ARGS="
     --bf16 \
     --output_dir ${OUTPUT_DIR} \
     --run_name ${RUN_NAME} \
-    --num_train_epochs 10 \
+    --max_steps 1 \
     --per_device_train_batch_size ${BATCH_SIZE} \
     --gradient_accumulation_steps ${GRAD_ACCUM_STEPS} \
     --max_pixels ${MAX_PIXELS} \
@@ -83,10 +83,11 @@ ARGS="
     --max_grad_norm 1.0 \
     --lr_scheduler_type cosine \
     --model_max_length 8192 \
-    --save_strategy epoch \
-    --save_total_limit 3 \
+    --save_strategy steps \
+    --save_steps 1 \
+    --save_total_limit 1 \
     --logging_steps 1 \
-    --report_to tensorboard \
+    --report_to none \
     --eval_strategy no \
     --gradient_checkpointing True \
     --dataloader_num_workers 4
