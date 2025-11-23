@@ -1,69 +1,50 @@
-# Adopted from https://github.com/lm-sys/FastChat. Below is the original copyright:
-# Adopted from tatsu-lab@stanford_alpaca. Below is the original copyright:
-#    Copyright 2023 Rohan Taori, Ishaan Gulrajani, Tianyi Zhang, Yann Dubois, Xuechen Li
-#
-#    Licensed under the Apache License, Version 2.0 (the "License");
-#    you may not use this file except in compliance with the License.
-#    You may obtain a copy of the License at
-#
-#        http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#    See the License for the specific language governing permissions and
-#    limitations under the License.
+"""
+Training script for Qwen3-VL with precomputed vision embeddings.
 
-import os
+This is a simplified first version that demonstrates loading precomputed embeddings.
+The vision components are still loaded for now, but we use precomputed embeddings
+to save computation time. Future iterations will remove vision components entirely.
+"""
+
+import copy
 import logging
+import os
 import pathlib
 import torch
 import transformers
 import sys
 from pathlib import Path
 
+# Add project root to path so we can import qwenvl modules
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
-scripts_dir = project_root / "scripts_yunlin"
-sys.path.append(str(scripts_dir))
-
-from trainer import replace_qwen2_vl_attention_class
-
 from transformers import (
     Qwen2VLForConditionalGeneration,
     Qwen2_5_VLForConditionalGeneration,
     Qwen3VLForConditionalGeneration,
-    Qwen3VLMoeForConditionalGeneration
+    Qwen3VLMoeForConditionalGeneration,
+    AutoProcessor,
+    Trainer
 )
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from qwenvl.data.data_processor import make_supervised_data_module
-from qwenvl.data import data_list
-from qwenvl.train.argument import (
-    ModelArguments,
-    DataArguments,
-    TrainingArguments,
-)
-from transformers import AutoProcessor, Trainer
+from peft import LoraConfig, get_peft_model
 
-# Import inference callback for tracking training progress
-try:
-    from overfit_inference_callback import OverfitInferenceCallback
-    INFERENCE_CALLBACK_AVAILABLE = True
-except ImportError:
-    INFERENCE_CALLBACK_AVAILABLE = False
-    logging.warning("OverfitInferenceCallback not available. Inference tracking disabled.")
+from qwenvl.train.argument import ModelArguments, DataArguments, TrainingArguments
+from qwenvl.data.data_processor import rank0_print
+from qwenvl.data.data_processor_precomputed import create_precomputed_dataset, PrecomputedDataCollator
+from qwenvl.train.trainer import replace_qwen2_vl_attention_class
+
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 local_rank = None
 
 
-def rank0_print(*args):
-    if local_rank == 0:
-        print(*args)
-
-
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str):
     """Collects the state dict and dump to disk."""
-
     if trainer.deepspeed:
         torch.cuda.synchronize()
         trainer.save_model(output_dir)
@@ -77,12 +58,15 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: st
 
 
 def set_model(model_args, model):
+    """Set which parts of the model are trainable."""
     if model_args.tune_mm_vision:
         for n, p in model.visual.named_parameters():
-            p.requires_grad = True
+            if "merger" not in n:
+                p.requires_grad = True
     else:
         for n, p in model.visual.named_parameters():
-            p.requires_grad = False
+            if "merger" not in n:
+                p.requires_grad = False
 
     if model_args.tune_mm_mlp:
         for n, p in model.visual.merger.named_parameters():
@@ -138,6 +122,28 @@ def apply_lora(model_args, model):
     return model
 
 
+def delete_vision_components(model):
+    """
+    Delete vision encoder and MLP components to free memory.
+
+    This is a placeholder for future implementation. Currently kept simple to
+    ensure the training works first.
+    """
+    rank0_print("=" * 80)
+    rank0_print("NOTE: Vision components are still loaded in this version.")
+    rank0_print("Future versions will implement full deletion to save memory.")
+    rank0_print("=" * 80)
+
+    # TODO: Implement vision component deletion
+    # The challenge is that the model's forward expects these components.
+    # Options:
+    # 1. Create a custom forward method
+    # 2. Replace vision forward with dummy that uses cached embeddings
+    # 3. Load only LLM weights from checkpoint
+
+    pass
+
+
 def train(attn_implementation="flash_attention_2"):
     global local_rank
 
@@ -148,6 +154,21 @@ def train(attn_implementation="flash_attention_2"):
 
     local_rank = training_args.local_rank
     os.makedirs(training_args.output_dir, exist_ok=True)
+
+    # Check if using precomputed embeddings
+    if not data_args.use_precomputed_embeddings:
+        raise ValueError(
+            "This script requires --use_precomputed_embeddings True "
+            "and --precomputed_embeddings_dir <path>"
+        )
+
+    if not data_args.precomputed_embeddings_dir:
+        raise ValueError("Must specify --precomputed_embeddings_dir when using precomputed embeddings")
+
+    rank0_print("=" * 80)
+    rank0_print("Training with PRECOMPUTED VISION EMBEDDINGS")
+    rank0_print(f"Precomputed embeddings directory: {data_args.precomputed_embeddings_dir}")
+    rank0_print("=" * 80)
 
     # Prepare quantization config if load_in_4bit is enabled
     quantization_config = None
@@ -173,15 +194,58 @@ def train(attn_implementation="flash_attention_2"):
             is_moe = "moe" in model_type.lower()
             print(f"Detected model_type from config: {model_type} (MoE: {is_moe})")
 
+    # Load model WITHOUT vision components to save memory
+    # Strategy: Use LLM-only checkpoint with filtered weight index
+    # The checkpoint at model_name_or_path should have vision weights excluded from index
+    rank0_print("=" * 80)
+    rank0_print("PHASE 2: Loading model WITHOUT vision encoder and MLP")
+    rank0_print("Checkpoint must have filtered weight index (vision weights excluded)")
+    rank0_print("=" * 80)
+
+    # Load model
     if "qwen3" in model_args.model_name_or_path.lower() and is_moe:
+        rank0_print("Loading Qwen3VL-MoE from LLM-only checkpoint...")
+        rank0_print("Expected: Vision weights NOT in weight index → won't be loaded")
+
+        # Load model in float32 first (stays on CPU), then delete vision, then convert
+        rank0_print("Loading model on CPU (no dtype conversion yet)...")
         model = Qwen3VLMoeForConditionalGeneration.from_pretrained(
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
             attn_implementation=attn_implementation,
-            dtype=(torch.bfloat16 if training_args.bf16 and not model_args.load_in_4bit else None),
+            torch_dtype=torch.float32,  # Keep on CPU in FP32 temporarily
             quantization_config=quantization_config,
+            # NO device_map - stays on CPU until we manually move it
         )
         data_args.model_type = "qwen3vl"
+
+        rank0_print("✓ Model loaded from filtered checkpoint (CPU, FP32)")
+
+        # CRITICAL: Delete vision components NOW while still on CPU
+        # Vision components were randomly initialized (not in checkpoint)
+        # Deleting them prevents wasting GPU memory
+        rank0_print("Deleting vision encoder and MLP components...")
+        if hasattr(model, 'model') and hasattr(model.model, 'visual'):
+            # Count parameters before deletion
+            visual_params = sum(p.numel() for p in model.model.visual.parameters())
+            visual_m_params = visual_params / 1_000_000
+
+            # Delete the visual component
+            del model.model.visual
+            import gc
+            gc.collect()
+
+            rank0_print(f"✓ Deleted vision components ({visual_m_params:.1f}M parameters)")
+        else:
+            rank0_print("⚠ Warning: model.visual not found, cannot delete")
+
+        # Now convert to bfloat16 if requested (still on CPU)
+        if training_args.bf16 and not model_args.load_in_4bit:
+            rank0_print("Converting model to bfloat16...")
+            model = model.to(torch.bfloat16)
+            rank0_print("✓ Converted to bfloat16")
+
+        rank0_print("=" * 80)
     elif "qwen3" in model_args.model_name_or_path.lower():
         model = Qwen3VLForConditionalGeneration.from_pretrained(
             model_args.model_name_or_path,
@@ -210,20 +274,22 @@ def train(attn_implementation="flash_attention_2"):
         )
         data_args.model_type = "qwen2vl"
 
-    print(f'the initlized model is {model_args.model_name_or_path} the class is {model.__class__.__name__}')
+    print(f'the initialized model is {model_args.model_name_or_path} the class is {model.__class__.__name__}')
+
+    # Load processor (needed for tokenization)
     processor = AutoProcessor.from_pretrained(
         model_args.model_name_or_path,
     )
 
     if data_args.data_flatten or data_args.data_packing:
         replace_qwen2_vl_attention_class()
+
     model.config.use_cache = False
 
     if training_args.gradient_checkpointing:
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
         else:
-
             def make_inputs_require_grad(module, input, output):
                 output.requires_grad_(True)
 
@@ -243,55 +309,59 @@ def train(attn_implementation="flash_attention_2"):
     else:
         set_model(model_args, model)
 
-    # Print trainable parameters (only once in distributed mode, always in non-distributed)
+    # Print trainable parameters
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
         if hasattr(model, 'print_trainable_parameters'):
             model.print_trainable_parameters()
         else:
-            model.visual.print_trainable_parameters()
-            model.model.print_trainable_parameters()
-    
-    data_module = make_supervised_data_module(processor, data_args=data_args)
+            try:
+                model.visual.print_trainable_parameters()
+                model.model.print_trainable_parameters()
+            except:
+                pass
 
-    # Setup inference callback for tracking training progress
-    callbacks = []
-    if INFERENCE_CALLBACK_AVAILABLE:
-        try:
-            # Get dataset config to find annotation path
-            dataset_names = data_args.dataset_use.split(",")
-            dataset_configs = data_list(dataset_names)
-            if dataset_configs:
-                annotation_path = dataset_configs[0]["annotation_path"]
-                inference_callback = OverfitInferenceCallback(
-                    inference_frequency=5,  # Run inference every 5 epochs
-                    data_path=annotation_path,
-                    output_dir=training_args.output_dir,
-                    processor=processor  # Pass processor for inference
-                )
-                callbacks.append(inference_callback)
-                if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
-                    logging.info(f"✓ Inference callback enabled (every 5 epochs)")
-                    logging.info(f"  Output directory: {training_args.output_dir}/inference_progress/")
-        except Exception as e:
-            if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
-                logging.warning(f"Failed to setup inference callback: {e}")
+    # Delete vision components to save memory (TODO: implement fully)
+    delete_vision_components(model)
 
-    trainer = Trainer(
-        model=model, processing_class=tokenizer, args=training_args,
-        callbacks=callbacks, **data_module
+    # Create dataset with precomputed embeddings
+    rank0_print("Loading precomputed embeddings dataset...")
+    train_dataset = create_precomputed_dataset(
+        processor,
+        data_args,
+        data_args.precomputed_embeddings_dir
+    )
+    data_collator = PrecomputedDataCollator(processor.tokenizer)
+
+    rank0_print(f"Dataset loaded: {len(train_dataset)} samples")
+
+    # Create data module
+    data_module = dict(
+        train_dataset=train_dataset,
+        eval_dataset=None,
+        data_collator=data_collator
     )
 
+    # Setup trainer
+    trainer = Trainer(
+        model=model,
+        processing_class=tokenizer,
+        args=training_args,
+        **data_module
+    )
+
+    # Train
     if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):
         logging.info("checkpoint found, resume training")
         trainer.train(resume_from_checkpoint=True)
     else:
         trainer.train()
+
     trainer.save_state()
 
     model.config.use_cache = True
 
     safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
-    
+
     processor.save_pretrained(training_args.output_dir)
 
 

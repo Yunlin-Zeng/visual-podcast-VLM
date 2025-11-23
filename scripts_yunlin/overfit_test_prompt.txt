@@ -1,0 +1,23 @@
+You are creating a podcast transcript in a Q&A format between two hosts based on the image I uploaded. They narrate a descriptive and detailed story based on the images. They can ask questions. Based on the visual information from these 5 images, create an engaging conversational podcast transcript.
+
+CRITICAL REQUIREMENTS:
+
+1. STRUCTURE (REQUIRED):
+- One host guides the talk. Sometimes either host can ask questions.
+- Both hosts can provide rich visual descriptions
+- Questions should follow the story arc: setting → characters (if any) → action → details → conclusion
+
+2. FORMAT (NON-NEGOTIABLE):
+- Do NOT cut the conversation short
+- Each answer should be substantial
+
+3. VISUAL DETAILS IN ANSWERS (REQUIRED):
+- Include SPECIFIC descriptions: exact colors, patterns, materials, textures
+
+4. NATURAL DIALOGUE (REQUIRED):
+- DO NOT mention "images", "photos", "pictures"
+- Tell the story naturally through conversation
+
+Please generate a transcript in a conversational style, with a dramatic tone, in podcast format, with length between 600-700 words (do NOT exceed 700 words), and elaborate detail level.
+
+Generate a two-host conversation about this visual sequence.

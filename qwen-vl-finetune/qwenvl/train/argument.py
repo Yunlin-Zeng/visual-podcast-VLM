@@ -14,6 +14,10 @@ class ModelArguments:
     lora_alpha: int = field(default=128)
     lora_dropout: float = field(default=0.05)
     lora_target_modules: Optional[str] = field(default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
+    load_in_4bit: bool = field(default=False)
+    bnb_4bit_compute_dtype: str = field(default="bfloat16")
+    bnb_4bit_quant_type: str = field(default="nf4")
+    bnb_4bit_use_double_quant: bool = field(default=True)
 
 @dataclass
 class DataArguments:
@@ -28,6 +32,8 @@ class DataArguments:
     video_max_pixels: int = field(default=1024 * 28 * 28)
     video_min_pixels: int = field(default=256 * 28 * 28)
     video_fps: float = 2
+    use_precomputed_embeddings: bool = field(default=False)
+    precomputed_embeddings_dir: Optional[str] = field(default=None)
 
 
 @dataclass

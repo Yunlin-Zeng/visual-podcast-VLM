@@ -69,8 +69,8 @@ def inference_interactive(model, processor, seed=None):
         print("=" * 80)
 
         # Step 1: Get image paths
-        print("\nEnter 5 image paths (one per line)")
-        print("Or press Enter to use default test images")
+        print("\nEnter image paths (one per line)")
+        print("Type 'done' when finished, or press Enter on first image to use default test images")
         print("Examples:")
         print("  /home/ubuntu/image-to-text/data/visual_storytelling/images/test/1741642.jpg")
         print()
@@ -84,28 +84,38 @@ def inference_interactive(model, processor, seed=None):
             print("✓ Using default test images (story_6228)")
             image_paths = None
         else:
-            # Got first image, continue collecting 4 more
+            # Got first image, continue collecting more
             path1 = Path(first_input)
             if not path1.exists():
                 print(f"❌ File not found: {path1}")
                 continue
             image_paths.append(path1)
+            print(f"  ✓ Added image 1")
 
-            # Get remaining 4 images
-            for i in range(2, 6):
-                while True:
-                    path_input = input(f"Image {i}: ").strip()
-                    if path_input.lower() == 'q':
-                        print("Exiting...")
-                        return
+            # Get remaining images (no limit)
+            img_num = 2
+            while True:
+                path_input = input(f"Image {img_num} (or type 'done' to finish): ").strip()
 
-                    path = Path(path_input)
-                    if path.exists():
-                        image_paths.append(path)
-                        break
-                    else:
-                        print(f"  ❌ File not found: {path}")
-                        print(f"  Please enter a valid path")
+                if path_input.lower() == 'done':
+                    break
+
+                if path_input.lower() == 'q':
+                    print("Exiting...")
+                    return
+
+                if path_input == "":
+                    print("  ⚠️  Empty input. Type 'done' when finished, or enter a path")
+                    continue
+
+                path = Path(path_input)
+                if path.exists():
+                    image_paths.append(path)
+                    print(f"  ✓ Added image {img_num}")
+                    img_num += 1
+                else:
+                    print(f"  ❌ File not found: {path}")
+                    print(f"  Please enter a valid path or type 'done' to finish")
 
             print(f"\n✓ Using {len(image_paths)} custom images")
 
@@ -118,13 +128,22 @@ def inference_interactive(model, processor, seed=None):
             break
 
         if choice == 'c':
-            print("\nEnter your custom prompt (press Enter twice when done):")
+            print("\nEnter your custom prompt (press Enter three times when done):")
             lines = []
+            empty_count = 0
             while True:
                 line = input()
-                if line == "" and lines:
-                    break
-                lines.append(line)
+                if line == "":
+                    empty_count += 1
+                    if empty_count >= 3:
+                        break
+                    lines.append(line)  # Keep empty lines as part of prompt
+                else:
+                    empty_count = 0
+                    lines.append(line)
+            # Remove trailing empty lines
+            while lines and lines[-1] == "":
+                lines.pop()
             prompt_text = "\n".join(lines)
         elif choice in prompts and choice != 'c':
             prompt_text = prompts[choice]["text"]
@@ -399,6 +418,12 @@ def main():
         help="Inference mode: 'interactive' for testing, 'mass' for batch generation"
     )
     parser.add_argument(
+        "--model-path",
+        type=str,
+        default=None,
+        help="Path to model weights (default: /home/ubuntu/LLM/qwen3-vl-235b). Use /home/ubuntu/LLM/qwen3-vl-8b for 8B model"
+    )
+    parser.add_argument(
         "--lora-adapter",
         type=str,
         default=None,
@@ -421,7 +446,7 @@ def main():
 
     # Load model once (base model + optional LoRA adapter)
     print("Loading model...")
-    model, processor = load_model(lora_adapter_path=args.lora_adapter)
+    model, processor = load_model(model_path=args.model_path, lora_adapter_path=args.lora_adapter)
 
     # Store seed for use in inference
     global_seed = args.seed

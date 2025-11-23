@@ -32,6 +32,36 @@ PODCAST_QWEN_LORA = {
     "data_path": "",  # Empty because image paths are absolute in annotation
 }
 
+# SPoRC podcast excerpt dataset with speaker-labeled dialogue (894 complete excerpts)
+SPORC_EXCERPT = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_excerpt.json",
+    "data_path": "",  # Empty because image paths are relative in annotation
+}
+
+# SPoRC with working prompt format (800 word target, Q&A structure with final instruction)
+SPORC_EXCERPT_WORKING_PROMPT = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_excerpt_working_prompt.json",
+    "data_path": "",
+}
+
+# SPoRC with FULL DETAILED prompt from Nov 9 Test 1 (with examples, 600-700 words)
+SPORC_EXCERPT_DETAILED_PROMPT = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_detailed_prompt.json",
+    "data_path": "",
+}
+
+# Single sample for overfitting test (ep1131_ex0, 673 words, working Prompt 2 format)
+SPORC_OVERFIT_SINGLE = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_overfit_test_single_sample.json",
+    "data_path": "",
+}
+
+# SPoRC with 235B-aligned prompt (topics/themes focused, 800 words, Nov 11 2025)
+SPORC_235B_ALIGNED = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_235b_aligned.json",
+    "data_path": "",
+}
+
 data_dict = {
     "cambrian_737k": CAMBRIAN_737K,
     "cambrian_737k_pack": CAMBRIAN_737K_PACK,
@@ -39,6 +69,11 @@ data_dict = {
     "clevr_mc": CLEVR_MC,
     "videochatgpt": VIDEOCHATGPT,
     "podcast_qwen_lora": PODCAST_QWEN_LORA,
+    "sporc_excerpt": SPORC_EXCERPT,
+    "sporc_excerpt_working_prompt": SPORC_EXCERPT_WORKING_PROMPT,
+    "sporc_excerpt_detailed_prompt": SPORC_EXCERPT_DETAILED_PROMPT,
+    "sporc_overfit_single": SPORC_OVERFIT_SINGLE,
+    "sporc_235b_aligned": SPORC_235B_ALIGNED,
 }
 
 

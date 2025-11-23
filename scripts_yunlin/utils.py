@@ -9,31 +9,43 @@ from pathlib import Path
 import time
 
 
-def load_model(lora_adapter_path=None):
+def load_model(model_path=None, lora_adapter_path=None):
     """
     Load Qwen3-VL model once and keep in memory
 
     Args:
+        model_path: Path to model weights (default: /home/ubuntu/LLM/qwen3-vl-235b)
         lora_adapter_path: Optional path to LoRA adapter weights to load on top of base model
 
     Returns:
         tuple: (model, processor)
     """
+    # Default to 235B model if not specified
+    if model_path is None:
+        model_path = "/home/ubuntu/LLM/qwen3-vl-235b"
+
     print("=" * 80)
-    print("Loading Qwen3-VL-235B-A22B-Instruct model...")
+    print(f"Loading model from: {model_path}")
     print("=" * 80)
 
-    model_path = "/home/ubuntu/LLM/qwen3-vl-235b"
+    # Determine GPU memory allocation based on model size
+    if "8b" in model_path.lower():
+        # 8B model fits on single GPU - force single device to avoid multi-GPU overhead
+        max_memory = None
+        device_map = {"": "cuda:0"}  # Force single GPU (faster than multi-GPU for 8B)
+        print("Loading 8B model (single GPU for optimal speed)...")
+    else:
+        # 235B model needs multi-GPU - detect available GPUs dynamically
+        num_gpus = torch.cuda.device_count()
+        max_memory = {i: "70GB" for i in range(num_gpus)}
+        device_map = "auto"
+        print(f"Loading 235B model with multi-GPU distribution ({num_gpus} GPUs available)...")
 
-    # Force distribution across all 8 GPUs using max_memory
-    max_memory = {i: "70GB" for i in range(8)}
-
-    print("Loading base model with multi-GPU distribution...")
     model = AutoModelForImageTextToText.from_pretrained(
         model_path,
         dtype=torch.bfloat16,
-        device_map="auto",
-        max_memory=max_memory,  # Force model splitting across 8 GPUs
+        device_map=device_map,  # Use conditional device_map
+        max_memory=max_memory,
         trust_remote_code=True
     )
 
@@ -91,9 +103,9 @@ def run_inference(model, processor, prompt_text, image_dir=None, image_paths=Non
     # Handle image paths
     if image_paths is not None:
         # Use provided image paths
-        if len(image_paths) != 5:
+        if len(image_paths) == 0:
             if verbose:
-                print(f"⚠ Warning: Provided {len(image_paths)} images, expected 5")
+                print(f"⚠ Warning: No images provided")
             return None, None
         if verbose:
             print(f"\n✓ Using {len(image_paths)} provided images")
@@ -104,16 +116,16 @@ def run_inference(model, processor, prompt_text, image_dir=None, image_paths=Non
         else:
             image_dir = Path(image_dir)
 
-        # Load images from directory
+        # Load images from directory (default to 5 for backward compatibility)
         image_paths = sorted(image_dir.glob("image_*.jpg"))[:5]
 
-        if len(image_paths) != 5:
+        if len(image_paths) == 0:
             if verbose:
-                print(f"⚠ Warning: Found {len(image_paths)} images, expected 5")
+                print(f"⚠ Warning: No images found in {image_dir}")
             return None, None
 
         if verbose:
-            print(f"\n✓ Using images from: {image_dir.name}")
+            print(f"\n✓ Using {len(image_paths)} images from: {image_dir.name}")
 
     # Create messages - use plain string paths for local files
     messages = [
