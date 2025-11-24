@@ -1,0 +1,1 @@
+Generate a natural conversational podcast dialogue. Use the format Speaker 1:, Speaker 2:, Speaker 3:, etc. for multiple speakers. Do not reference the images or use phrases like "our first image". Write casual, authentic spoken dialogue without introductions or sign-offs. The word count should be around 800 words.

@@ -1,0 +1,16 @@
+Story ID: 47306
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: this lady wants to look fashionable before she goes out .
+
+[Image 2]: she goes on her motorcycle . she prepares to go to the race .
+
+[Image 3]: she arrives at the race and changes into more appropriate clothing .
+
+[Image 4]: other people are racing . they are trying to conserve their energy for the whole race .
+
+[Image 5]: other people are also racing . they are trying to win .
+

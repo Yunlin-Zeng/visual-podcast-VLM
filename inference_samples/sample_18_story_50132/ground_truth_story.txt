@@ -1,0 +1,16 @@
+Story ID: 50132
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: i woke up yesterday and decided to go and see the geyser .
+
+[Image 2]: many people were there to watch .
+
+[Image 3]: it was pretty big .
+
+[Image 4]: when it erupted the water was very high .
+
+[Image 5]: it was incredible .
+

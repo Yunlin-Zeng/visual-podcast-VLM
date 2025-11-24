@@ -1,0 +1,16 @@
+Story ID: 46729
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: this is a picture of a macbook air .
+
+[Image 2]: this is a picture of a man welding .
+
+[Image 3]: this is a picture of a man .
+
+[Image 4]: this is a picture of a mask .
+
+[Image 5]: this is a photo of a black mask .
+

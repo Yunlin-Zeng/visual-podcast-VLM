@@ -189,14 +189,21 @@ def main():
     import argparse
     import re
 
+    from datetime import datetime
+
     parser = argparse.ArgumentParser(description="Batch evaluation for Qwen3-VL-32B checkpoints")
     parser.add_argument("--lora-dir", type=str, required=True,
                         help="Directory containing LoRA checkpoints (e.g., finetuned_models/2025-11-22_qwen3vl-32b-sporc-lora)")
+    parser.add_argument("--output-base-dir", type=str, default="/home/ubuntu/LLM/qwen3-vl-32b",
+                        help="Base directory for saving evaluation outputs")
     parser.add_argument("--include-base", action="store_true", default=True,
                         help="Also evaluate base model without LoRA")
     parser.add_argument("--num-samples", type=int, default=20,
                         help="Number of test samples to evaluate")
     args = parser.parse_args()
+
+    # Get today's date for output directories
+    today = datetime.now().strftime("%Y-%m-%d")
 
     # Set random seed for reproducibility
     random.seed(42)
@@ -261,12 +268,22 @@ def main():
             variant['lora_adapter']
         )
 
-        # Create output directory
+        # Create output directory with date prefix
         if variant['lora_adapter']:
-            output_dir = Path(variant['lora_adapter']) / "evaluation_outputs_corrected_prompt"
+            # Checkpoint outputs go in their checkpoint directory
+            output_dir = Path(variant['lora_adapter']) / f"{today}_evaluation"
         else:
-            output_dir = Path(variant['model_path']) / "evaluation_outputs_32b_base_corrected_prompt"
+            # Base model outputs go in the base model directory
+            output_dir = Path(args.output_base_dir) / f"{today}_evaluation_32b_base"
         output_dir.mkdir(exist_ok=True, parents=True)
+
+        # Save the prompt template to output directory
+        prompt_file = output_dir / "input_prompt.txt"
+        with open(prompt_file, 'w') as f:
+            f.write("INPUT PROMPT TEMPLATE\n")
+            f.write("=" * 60 + "\n\n")
+            f.write(PROMPT_TEMPLATE)
+        print(f"  ✓ Saved prompt to: {prompt_file}")
 
         # Run inference on all test samples
         print(f"\nRunning inference on {len(test_stories)} samples...")
@@ -307,9 +324,9 @@ def main():
     print("\nOutput locations:")
     for variant in model_variants:
         if variant['lora_adapter']:
-            output_dir = Path(variant['lora_adapter']) / "evaluation_outputs_corrected_prompt"
+            output_dir = Path(variant['lora_adapter']) / f"{today}_evaluation"
         else:
-            output_dir = Path(variant['model_path']) / "evaluation_outputs_32b_base_corrected_prompt"
+            output_dir = Path(args.output_base_dir) / f"{today}_evaluation_32b_base"
         print(f"  {variant['name']:20s}: {output_dir}")
     print("="*80)
 

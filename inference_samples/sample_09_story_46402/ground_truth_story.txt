@@ -1,0 +1,16 @@
+Story ID: 46402
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: the graduation ceremony was beautiful last weekend .
+
+[Image 2]: there were a lot of students there .
+
+[Image 3]: many family members showed up to support me .
+
+[Image 4]: i was very happy to see them all .
+
+[Image 5]: they all got me a lot of flowers .
+

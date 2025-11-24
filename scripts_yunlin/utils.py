@@ -29,11 +29,18 @@ def load_model(model_path=None, lora_adapter_path=None):
     print("=" * 80)
 
     # Determine GPU memory allocation based on model size
-    if "8b" in model_path.lower():
+    model_path_lower = model_path.lower()
+    if "8b" in model_path_lower:
         # 8B model fits on single GPU - force single device to avoid multi-GPU overhead
         max_memory = None
         device_map = {"": "cuda:0"}  # Force single GPU (faster than multi-GPU for 8B)
         print("Loading 8B model (single GPU for optimal speed)...")
+    elif "32b" in model_path_lower:
+        # 32B model (~64GB) can fit on single 80GB GPU or use 2 GPUs
+        num_gpus = torch.cuda.device_count()
+        max_memory = {i: "70GB" for i in range(num_gpus)}
+        device_map = "auto"
+        print(f"Loading 32B model with multi-GPU distribution ({num_gpus} GPUs available)...")
     else:
         # 235B model needs multi-GPU - detect available GPUs dynamically
         num_gpus = torch.cuda.device_count()

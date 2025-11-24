@@ -1,0 +1,16 @@
+Story ID: 50208
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: the makeup artist did their job .
+
+[Image 2]: then the show began .
+
+[Image 3]: the place was pretty packed by then .
+
+[Image 4]: but the event went off without a hitch .
+
+[Image 5]: we partied then called it a night .
+

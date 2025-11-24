@@ -1,0 +1,16 @@
+Story ID: 50242
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: i went down to the wedding party .
+
+[Image 2]: there were tons of people there .
+
+[Image 3]: we were having some drinks outside .
+
+[Image 4]: there was a lot of food .
+
+[Image 5]: i ate a lot of cupcakes .
+

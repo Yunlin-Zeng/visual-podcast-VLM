@@ -1,11 +1,14 @@
 """
-Main inference script for Qwen3-VL-235B
-Supports two modes:
+Main inference script for Qwen3-VL
+Supports three modes:
   - interactive: Interactive testing with predefined/custom prompts
-  - mass: Batch inference on 200 prompts for training data generation
+  - single: Batch inference on samples directory (for evaluation)
+  - mass: Batch inference on 200 prompts for training data generation (legacy)
 
 Usage:
-  python inference.py --mode interactive
+  python inference.py --mode interactive --model-path /home/ubuntu/LLM/qwen3-vl-32b
+  python inference.py --mode single --model-path /home/ubuntu/LLM/qwen3-vl-32b \
+      --samples-dir ./inference_samples --output-dir ./outputs --prompt "Your prompt here"
   python inference.py --mode mass [--start-idx 0]
 """
 
@@ -196,6 +199,112 @@ def inference_interactive(model, processor, seed=None):
         if cont != 'y':
             print("Exiting...")
             break
+
+
+def inference_single(model, processor, samples_dir, output_dir, prompt, seed=None):
+    """Single batch mode: run inference on all samples in a directory
+
+    Args:
+        model: Loaded model
+        processor: Loaded processor
+        samples_dir: Directory containing sample subdirectories (each with 5 images)
+        output_dir: Directory to save outputs
+        prompt: Prompt text to use for all samples
+        seed: Random seed for reproducibility
+    """
+    import random
+
+    samples_dir = Path(samples_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save prompt to output directory
+    prompt_file = output_dir / "input_prompt.txt"
+    with open(prompt_file, 'w') as f:
+        f.write("INPUT PROMPT\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(prompt)
+    print(f"✓ Saved prompt to: {prompt_file}")
+
+    # Discover sample directories
+    sample_dirs = sorted([d for d in samples_dir.iterdir() if d.is_dir() and d.name.startswith("sample_")])
+    print(f"\n✓ Found {len(sample_dirs)} samples in {samples_dir}")
+
+    print("\n" + "=" * 80)
+    print(f"Running inference on {len(sample_dirs)} samples...")
+    print("=" * 80)
+
+    results = []
+    for i, sample_dir in enumerate(sample_dirs, 1):
+        # Get images sorted by name
+        images = sorted(sample_dir.glob("image_*.jpg"))
+        if len(images) != 5:
+            print(f"  [{i:2d}/{len(sample_dirs)}] {sample_dir.name}: ⚠ Skipping (found {len(images)} images, expected 5)")
+            continue
+
+        print(f"  [{i:2d}/{len(sample_dirs)}] {sample_dir.name}...", end=" ", flush=True)
+
+        try:
+            # Run inference
+            output, timing = run_inference(
+                model, processor, prompt,
+                image_paths=images,
+                verbose=False,
+                seed=seed
+            )
+
+            if output is None:
+                print("✗ Failed")
+                continue
+
+            word_count = len(output.split())
+            print(f"✓ ({word_count} words, {timing['generation_time']:.1f}s)")
+
+            # Save output
+            output_file = output_dir / f"{sample_dir.name}.txt"
+            with open(output_file, 'w') as f:
+                f.write(f"Sample: {sample_dir.name}\n")
+                f.write(f"Word count: {word_count}\n")
+                f.write(f"Generation time: {timing['generation_time']:.1f}s\n")
+                f.write("=" * 60 + "\n\n")
+                f.write(output)
+
+            results.append({
+                'sample': sample_dir.name,
+                'word_count': word_count,
+                'generation_time': timing['generation_time']
+            })
+
+        except Exception as e:
+            print(f"✗ Error: {e}")
+            continue
+
+    # Print summary
+    print("\n" + "=" * 80)
+    print("SUMMARY")
+    print("=" * 80)
+    print(f"✓ Completed: {len(results)}/{len(sample_dirs)} samples")
+    print(f"✓ Outputs saved to: {output_dir}")
+
+    if results:
+        avg_words = sum(r['word_count'] for r in results) / len(results)
+        avg_time = sum(r['generation_time'] for r in results) / len(results)
+        total_time = sum(r['generation_time'] for r in results)
+        print(f"\nStatistics:")
+        print(f"  - Average word count: {avg_words:.1f}")
+        print(f"  - Average time per sample: {avg_time:.1f}s")
+        print(f"  - Total generation time: {total_time/60:.1f} minutes")
+
+    # Save summary JSON
+    summary_file = output_dir / "summary.json"
+    with open(summary_file, 'w') as f:
+        json.dump({
+            'prompt': prompt,
+            'num_samples': len(sample_dirs),
+            'num_completed': len(results),
+            'results': results
+        }, f, indent=2)
+    print(f"✓ Summary saved to: {summary_file}")
 
 
 def inference_mass(model, processor, start_idx=0):
@@ -413,9 +522,9 @@ def main():
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["interactive", "mass"],
+        choices=["interactive", "single", "mass"],
         required=True,
-        help="Inference mode: 'interactive' for testing, 'mass' for batch generation"
+        help="Inference mode: 'interactive' for testing, 'single' for batch evaluation, 'mass' for training data generation"
     )
     parser.add_argument(
         "--model-path",
@@ -441,6 +550,31 @@ def main():
         default=0,
         help="Starting index for mass inference (for resuming)"
     )
+    # Arguments for --mode single
+    parser.add_argument(
+        "--samples-dir",
+        type=str,
+        default=None,
+        help="Directory containing sample subdirectories (for --mode single)"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory to save outputs (for --mode single)"
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default=None,
+        help="Prompt text for inference (for --mode single)"
+    )
+    parser.add_argument(
+        "--prompt-file",
+        type=str,
+        default=None,
+        help="Path to file containing prompt text (alternative to --prompt)"
+    )
 
     args = parser.parse_args()
 
@@ -456,6 +590,23 @@ def main():
     # Run selected mode
     if args.mode == "interactive":
         inference_interactive(model, processor, seed=global_seed)
+    elif args.mode == "single":
+        # Validate required arguments
+        if not args.samples_dir:
+            parser.error("--samples-dir is required for --mode single")
+        if not args.output_dir:
+            parser.error("--output-dir is required for --mode single")
+        if not args.prompt and not args.prompt_file:
+            parser.error("--prompt or --prompt-file is required for --mode single")
+
+        # Load prompt from file if specified
+        if args.prompt_file:
+            with open(args.prompt_file, 'r') as f:
+                prompt_text = f.read().strip()
+        else:
+            prompt_text = args.prompt
+
+        inference_single(model, processor, args.samples_dir, args.output_dir, prompt_text, seed=global_seed)
     elif args.mode == "mass":
         inference_mass(model, processor, start_idx=args.start_idx)
 

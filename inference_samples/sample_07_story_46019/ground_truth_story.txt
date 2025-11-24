@@ -1,0 +1,16 @@
+Story ID: 46019
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: there was a high speed chase on the highway .
+
+[Image 2]: the police came out in full force .
+
+[Image 3]: even the motorcycle cops joined the chase .
+
+[Image 4]: traffic was stopped at the exits so the perpetrator could not escape .
+
+[Image 5]: onlookers gathered at the overpass to see the outcome .
+

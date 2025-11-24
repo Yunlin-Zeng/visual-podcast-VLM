@@ -1,0 +1,16 @@
+Story ID: 48835
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: the family decided to get together for the 4th of july .
+
+[Image 2]: the kids decided to go swimming in the pool .
+
+[Image 3]: the kids occupied their time playing games in the pool .
+
+[Image 4]: at the 4th of july get together , they family had a great time catching up .
+
+[Image 5]: the grandparents came by to be with their grand kids during the 4th of july .
+

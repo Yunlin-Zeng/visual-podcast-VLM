@@ -1,0 +1,16 @@
+Story ID: 48383
+============================================================
+
+VIST Ground Truth Story:
+----------------------------------------
+
+[Image 1]: this is a picture of a road .
+
+[Image 2]: this is a picture of a bridge .
+
+[Image 3]: this is a picture of a building .
+
+[Image 4]: this is a picture of a sunny day .
+
+[Image 5]: this is a picture of a dark room .
+
