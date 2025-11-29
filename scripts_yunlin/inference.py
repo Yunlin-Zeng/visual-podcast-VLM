@@ -8,7 +8,7 @@ Supports three modes:
 Usage:
   python inference.py --mode interactive --model-path /home/ubuntu/LLM/qwen3-vl-32b
   python inference.py --mode single --model-path /home/ubuntu/LLM/qwen3-vl-32b \
-      --samples-dir ./inference_samples --output-dir ./outputs --prompt "Your prompt here"
+      --sample-dir ./inference_samples/sample_01 --output-dir ./outputs --prompt "Your prompt here"
   python inference.py --mode mass [--start-idx 0]
 """
 
@@ -201,110 +201,66 @@ def inference_interactive(model, processor, seed=None):
             break
 
 
-def inference_single(model, processor, samples_dir, output_dir, prompt, seed=None):
-    """Single batch mode: run inference on all samples in a directory
+def inference_single(model, processor, sample_dir, output_dir, prompt, seed=None):
+    """Single mode: run inference on ONE sample directory
 
     Args:
         model: Loaded model
         processor: Loaded processor
-        samples_dir: Directory containing sample subdirectories (each with 5 images)
+        sample_dir: Path to a single sample directory (containing images)
         output_dir: Directory to save outputs
-        prompt: Prompt text to use for all samples
+        prompt: Prompt text to use
         seed: Random seed for reproducibility
     """
-    import random
-
-    samples_dir = Path(samples_dir)
+    sample_dir = Path(sample_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save prompt to output directory
-    prompt_file = output_dir / "input_prompt.txt"
-    with open(prompt_file, 'w') as f:
-        f.write("INPUT PROMPT\n")
-        f.write("=" * 60 + "\n\n")
-        f.write(prompt)
-    print(f"✓ Saved prompt to: {prompt_file}")
+    sample_name = sample_dir.name
 
-    # Discover sample directories
-    sample_dirs = sorted([d for d in samples_dir.iterdir() if d.is_dir() and d.name.startswith("sample_")])
-    print(f"\n✓ Found {len(sample_dirs)} samples in {samples_dir}")
+    # Get images sorted by name
+    images = sorted(sample_dir.glob("image_*.jpg"))
+    if len(images) == 0:
+        # Try png
+        images = sorted(sample_dir.glob("image_*.png"))
 
-    print("\n" + "=" * 80)
-    print(f"Running inference on {len(sample_dirs)} samples...")
-    print("=" * 80)
+    print(f"Processing {sample_name} ({len(images)} images)...")
 
-    results = []
-    for i, sample_dir in enumerate(sample_dirs, 1):
-        # Get images sorted by name
-        images = sorted(sample_dir.glob("image_*.jpg"))
-        if len(images) != 5:
-            print(f"  [{i:2d}/{len(sample_dirs)}] {sample_dir.name}: ⚠ Skipping (found {len(images)} images, expected 5)")
-            continue
+    try:
+        # Run inference
+        output, timing = run_inference(
+            model, processor, prompt,
+            image_paths=images,
+            verbose=False,
+            seed=seed
+        )
 
-        print(f"  [{i:2d}/{len(sample_dirs)}] {sample_dir.name}...", end=" ", flush=True)
+        if output is None:
+            print(f"✗ {sample_name}: Failed")
+            return None
 
-        try:
-            # Run inference
-            output, timing = run_inference(
-                model, processor, prompt,
-                image_paths=images,
-                verbose=False,
-                seed=seed
-            )
+        word_count = len(output.split())
+        print(f"✓ {sample_name}: {word_count} words, {timing['generation_time']:.1f}s")
 
-            if output is None:
-                print("✗ Failed")
-                continue
+        # Save output
+        output_file = output_dir / f"{sample_name}.txt"
+        with open(output_file, 'w') as f:
+            f.write(f"Sample: {sample_name}\n")
+            f.write(f"Word count: {word_count}\n")
+            f.write(f"Generation time: {timing['generation_time']:.1f}s\n")
+            f.write("=" * 60 + "\n\n")
+            f.write(output)
 
-            word_count = len(output.split())
-            print(f"✓ ({word_count} words, {timing['generation_time']:.1f}s)")
+        print(f"✓ Saved to: {output_file}")
+        return {
+            'sample': sample_name,
+            'word_count': word_count,
+            'generation_time': timing['generation_time']
+        }
 
-            # Save output
-            output_file = output_dir / f"{sample_dir.name}.txt"
-            with open(output_file, 'w') as f:
-                f.write(f"Sample: {sample_dir.name}\n")
-                f.write(f"Word count: {word_count}\n")
-                f.write(f"Generation time: {timing['generation_time']:.1f}s\n")
-                f.write("=" * 60 + "\n\n")
-                f.write(output)
-
-            results.append({
-                'sample': sample_dir.name,
-                'word_count': word_count,
-                'generation_time': timing['generation_time']
-            })
-
-        except Exception as e:
-            print(f"✗ Error: {e}")
-            continue
-
-    # Print summary
-    print("\n" + "=" * 80)
-    print("SUMMARY")
-    print("=" * 80)
-    print(f"✓ Completed: {len(results)}/{len(sample_dirs)} samples")
-    print(f"✓ Outputs saved to: {output_dir}")
-
-    if results:
-        avg_words = sum(r['word_count'] for r in results) / len(results)
-        avg_time = sum(r['generation_time'] for r in results) / len(results)
-        total_time = sum(r['generation_time'] for r in results)
-        print(f"\nStatistics:")
-        print(f"  - Average word count: {avg_words:.1f}")
-        print(f"  - Average time per sample: {avg_time:.1f}s")
-        print(f"  - Total generation time: {total_time/60:.1f} minutes")
-
-    # Save summary JSON
-    summary_file = output_dir / "summary.json"
-    with open(summary_file, 'w') as f:
-        json.dump({
-            'prompt': prompt,
-            'num_samples': len(sample_dirs),
-            'num_completed': len(results),
-            'results': results
-        }, f, indent=2)
-    print(f"✓ Summary saved to: {summary_file}")
+    except Exception as e:
+        print(f"✗ {sample_name}: Error - {e}")
+        return None
 
 
 def inference_mass(model, processor, start_idx=0):
@@ -552,10 +508,10 @@ def main():
     )
     # Arguments for --mode single
     parser.add_argument(
-        "--samples-dir",
+        "--sample-dir",
         type=str,
         default=None,
-        help="Directory containing sample subdirectories (for --mode single)"
+        help="Path to a single sample directory containing images (for --mode single)"
     )
     parser.add_argument(
         "--output-dir",
@@ -592,8 +548,8 @@ def main():
         inference_interactive(model, processor, seed=global_seed)
     elif args.mode == "single":
         # Validate required arguments
-        if not args.samples_dir:
-            parser.error("--samples-dir is required for --mode single")
+        if not args.sample_dir:
+            parser.error("--sample-dir is required for --mode single")
         if not args.output_dir:
             parser.error("--output-dir is required for --mode single")
         if not args.prompt and not args.prompt_file:
@@ -606,7 +562,7 @@ def main():
         else:
             prompt_text = args.prompt
 
-        inference_single(model, processor, args.samples_dir, args.output_dir, prompt_text, seed=global_seed)
+        inference_single(model, processor, args.sample_dir, args.output_dir, prompt_text, seed=global_seed)
     elif args.mode == "mass":
         inference_mass(model, processor, start_idx=args.start_idx)
 

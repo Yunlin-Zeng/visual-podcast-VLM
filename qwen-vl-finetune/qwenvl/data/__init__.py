@@ -62,6 +62,30 @@ SPORC_235B_ALIGNED = {
     "data_path": "",
 }
 
+# SPoRC 4004 samples (2025-11-03 + 2025-11-24) - 4,004 excerpts with 1-6 images each
+SPORC_4004_SAMPLES = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_4004_samples.json",
+    "data_path": "",
+}
+
+# SPoRC 4004 samples v2 - dynamic word count range per sample
+SPORC_4004_SAMPLES_V2 = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_4004_samples_v2.json",
+    "data_path": "",
+}
+
+# SPoRC 4004 samples v3 - 894-sample style prompt with dynamic word count
+SPORC_4004_SAMPLES_V3 = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_4004_samples_v3.json",
+    "data_path": "",
+}
+
+# SPoRC super conservative - exact same prompt as 894-sample (5+ images, fixed 800 words)
+SPORC_SUPER_CONSERVATIVE = {
+    "annotation_path": "/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_super_conservative.json",
+    "data_path": "",
+}
+
 data_dict = {
     "cambrian_737k": CAMBRIAN_737K,
     "cambrian_737k_pack": CAMBRIAN_737K_PACK,
@@ -74,6 +98,10 @@ data_dict = {
     "sporc_excerpt_detailed_prompt": SPORC_EXCERPT_DETAILED_PROMPT,
     "sporc_overfit_single": SPORC_OVERFIT_SINGLE,
     "sporc_235b_aligned": SPORC_235B_ALIGNED,
+    "sporc_4004_samples": SPORC_4004_SAMPLES,
+    "sporc_4004_samples_v2": SPORC_4004_SAMPLES_V2,
+    "sporc_4004_samples_v3": SPORC_4004_SAMPLES_V3,
+    "sporc_super_conservative": SPORC_SUPER_CONSERVATIVE,
 }
 
 
