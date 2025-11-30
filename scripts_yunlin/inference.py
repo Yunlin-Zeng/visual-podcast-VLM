@@ -1,14 +1,17 @@
 """
 Main inference script for Qwen3-VL
-Supports three modes:
+Supports four modes:
   - interactive: Interactive testing with predefined/custom prompts
-  - single: Batch inference on samples directory (for evaluation)
+  - single: Inference on ONE sample directory
+  - batch: Inference on ALL samples (loads model once, runs sequentially)
   - mass: Batch inference on 200 prompts for training data generation (legacy)
 
 Usage:
   python inference.py --mode interactive --model-path /home/ubuntu/LLM/qwen3-vl-32b
   python inference.py --mode single --model-path /home/ubuntu/LLM/qwen3-vl-32b \
       --sample-dir ./inference_samples/sample_01 --output-dir ./outputs --prompt "Your prompt here"
+  python inference.py --mode batch --model-path /home/ubuntu/LLM/qwen3-vl-235b \
+      --samples-dir ./inference_samples --output-dir ./outputs --prompt-file ./prompt.txt
   python inference.py --mode mass [--start-idx 0]
 """
 
@@ -415,6 +418,75 @@ def inference_mass(model, processor, start_idx=0):
         print(f"  - Total generation time: {total_time/60:.1f} minutes")
 
 
+def inference_batch(model, processor, samples_dir, output_dir, prompt, seed=None):
+    """Batch mode: load model once, run inference_single on ALL sample directories
+
+    Args:
+        model: Loaded model
+        processor: Loaded processor
+        samples_dir: Path to parent directory containing sample_* directories
+        output_dir: Directory to save outputs
+        prompt: Prompt text to use
+        seed: Random seed for reproducibility
+    """
+    samples_dir = Path(samples_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find all sample directories
+    sample_dirs = sorted(samples_dir.glob("sample_*"))
+    if len(sample_dirs) == 0:
+        print(f"No sample directories found in {samples_dir}")
+        return
+
+    print("=" * 80)
+    print(f"Batch Evaluation - {len(sample_dirs)} samples (model loaded once)")
+    print("=" * 80)
+    print(f"Samples dir: {samples_dir}")
+    print(f"Output dir: {output_dir}")
+    print("=" * 80)
+
+    # Save prompt to output dir
+    prompt_file = output_dir / "input_prompt.txt"
+    with open(prompt_file, 'w') as f:
+        f.write(prompt)
+
+    results = []
+    for i, sample_dir in enumerate(sample_dirs, 1):
+        sample_name = sample_dir.name
+        output_file = output_dir / f"{sample_name}.txt"
+
+        # Skip if already done
+        if output_file.exists():
+            print(f"[{i}/{len(sample_dirs)}] {sample_name} - already done, skipping")
+            continue
+
+        print(f"\n[{i}/{len(sample_dirs)}] Processing {sample_name}...")
+
+        # Use inference_single for the actual work
+        result = inference_single(model, processor, sample_dir, output_dir, prompt, seed=seed)
+        if result:
+            results.append(result)
+
+    # Print summary
+    print("\n" + "=" * 80)
+    print(f"Batch complete: {len(results)}/{len(sample_dirs)} samples")
+    if results:
+        avg_words = sum(r['word_count'] for r in results) / len(results)
+        avg_time = sum(r['generation_time'] for r in results) / len(results)
+        print(f"Average: {avg_words:.0f} words, {avg_time:.1f}s per sample")
+    print("=" * 80)
+
+    # Save summary
+    summary_file = output_dir / "summary.json"
+    with open(summary_file, 'w') as f:
+        json.dump({
+            'total_samples': len(sample_dirs),
+            'completed': len(results),
+            'results': results
+        }, f, indent=2)
+
+
 def inference(images, prompt, model=None, processor=None, model_path=None):
     """
     Simple inference function for single prediction
@@ -478,9 +550,9 @@ def main():
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["interactive", "single", "mass"],
+        choices=["interactive", "single", "batch", "mass"],
         required=True,
-        help="Inference mode: 'interactive' for testing, 'single' for batch evaluation, 'mass' for training data generation"
+        help="Inference mode: 'interactive' for testing, 'single' for one sample, 'batch' for all samples (loads model once), 'mass' for training data generation"
     )
     parser.add_argument(
         "--model-path",
@@ -506,12 +578,18 @@ def main():
         default=0,
         help="Starting index for mass inference (for resuming)"
     )
-    # Arguments for --mode single
+    # Arguments for --mode single and --mode batch
     parser.add_argument(
         "--sample-dir",
         type=str,
         default=None,
         help="Path to a single sample directory containing images (for --mode single)"
+    )
+    parser.add_argument(
+        "--samples-dir",
+        type=str,
+        default=None,
+        help="Path to parent directory containing sample_* directories (for --mode batch)"
     )
     parser.add_argument(
         "--output-dir",
@@ -563,6 +641,23 @@ def main():
             prompt_text = args.prompt
 
         inference_single(model, processor, args.sample_dir, args.output_dir, prompt_text, seed=global_seed)
+    elif args.mode == "batch":
+        # Validate required arguments
+        if not args.samples_dir:
+            parser.error("--samples-dir is required for --mode batch")
+        if not args.output_dir:
+            parser.error("--output-dir is required for --mode batch")
+        if not args.prompt and not args.prompt_file:
+            parser.error("--prompt or --prompt-file is required for --mode batch")
+
+        # Load prompt from file if specified
+        if args.prompt_file:
+            with open(args.prompt_file, 'r') as f:
+                prompt_text = f.read().strip()
+        else:
+            prompt_text = args.prompt
+
+        inference_batch(model, processor, args.samples_dir, args.output_dir, prompt_text, seed=global_seed)
     elif args.mode == "mass":
         inference_mass(model, processor, start_idx=args.start_idx)
 
