@@ -2,7 +2,7 @@
 """
 Convert SPoRC podcast excerpt dataset to Qwen3-VL training format.
 Supports multiple data sources (old and new extractions).
-Filters to only include excerpts with all images successfully generated.
+Includes ALL excerpts with at least 1 image (variable number of images per sample).
 """
 
 import json
@@ -24,7 +24,7 @@ DEFAULT_DATA_SOURCES = [
     ),
 ]
 
-OUTPUT_FILE = Path("/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_combined.json")
+OUTPUT_FILE = Path("/home/ubuntu/image-to-text/Qwen3-VL/data/qwen_training_data_sporc_4004_samples.json")
 
 
 def load_all_metadata(metadata_dir: Path, source_name: str) -> List[Dict[str, Any]]:
@@ -53,10 +53,9 @@ def load_all_metadata(metadata_dir: Path, source_name: str) -> List[Dict[str, An
     return all_excerpts
 
 
-def check_images_exist(excerpt: Dict[str, Any], image_dir: Path) -> Tuple[bool, List[str]]:
-    """Check if all images for an excerpt exist. Returns (all_exist, image_paths)."""
+def get_existing_images(excerpt: Dict[str, Any], image_dir: Path) -> List[str]:
+    """Get all existing images for an excerpt. Returns list of image paths."""
     image_paths = []
-    all_exist = True
 
     for scene in excerpt['scenes']:
         filename = scene['filename']
@@ -65,33 +64,33 @@ def check_images_exist(excerpt: Dict[str, Any], image_dir: Path) -> Tuple[bool, 
         if image_path.exists():
             # Use absolute path for reliability
             image_paths.append(str(image_path))
-        else:
-            all_exist = False
-            break
 
-    return all_exist, image_paths
+    return image_paths
 
 
 def convert_to_qwen_format(
     excerpts: List[Dict[str, Any]],
     image_dir: Path,
-    source_name: str
+    source_name: str,
+    prompt_template: str
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """Convert excerpts to Qwen3-VL training format."""
+    """Convert excerpts to Qwen3-VL training format. Includes all excerpts with at least 1 image."""
     qwen_data = []
-    stats = {'complete': 0, 'incomplete': 0}
+    # Track by number of images: {1: count, 2: count, ..., 6: count, 0: count}
+    stats = {i: 0 for i in range(7)}
 
     for excerpt in excerpts:
-        all_exist, image_paths = check_images_exist(excerpt, image_dir)
+        image_paths = get_existing_images(excerpt, image_dir)
+        num_images = len(image_paths)
 
-        if not all_exist:
-            stats['incomplete'] += 1
+        # Skip excerpts with no images
+        if num_images == 0:
+            stats[0] += 1
             continue
 
-        stats['complete'] += 1
+        stats[num_images] += 1
 
-        # Build the conversation format
-        num_images = len(image_paths)
+        # Build the conversation format with variable number of image tags
         image_tags = "<image>" * num_images
 
         qwen_entry = {
@@ -99,7 +98,7 @@ def convert_to_qwen_format(
             "conversations": [
                 {
                     "from": "human",
-                    "value": f"{image_tags}\nGenerate a natural conversational podcast dialogue. Use the format Speaker 1:, Speaker 2:, Speaker 3:, etc. for multiple speakers. Do not reference the images or use phrases like \"our first image\". Write casual, authentic spoken dialogue without introductions or sign-offs. The word count should be around 800 words."
+                    "value": f"{image_tags}\n{prompt_template}"
                 },
                 {
                     "from": "gpt",
@@ -109,17 +108,37 @@ def convert_to_qwen_format(
         }
         qwen_data.append(qwen_entry)
 
-    print(f"  [{source_name}] Complete: {stats['complete']}, Incomplete: {stats['incomplete']}")
+    # Print stats
+    print(f"  [{source_name}] By image count:")
+    for i in range(6, 0, -1):
+        if stats[i] > 0:
+            print(f"    {i} images: {stats[i]}")
+    if stats[0] > 0:
+        print(f"    0 images (skipped): {stats[0]}")
+
     return qwen_data, stats
+
+
+DEFAULT_PROMPT = "Generate a natural conversational podcast dialogue. Use the format Speaker 1:, Speaker 2:, Speaker 3:, etc. for multiple speakers. Do not reference the images or use phrases like \"our first image\". Write casual, authentic spoken dialogue without introductions or sign-offs. The word count should be around 800 words."
 
 
 def main():
     parser = argparse.ArgumentParser(description='Convert SPoRC excerpts to Qwen training format')
     parser.add_argument('--output', type=str, default=str(OUTPUT_FILE), help='Output JSON file')
     parser.add_argument('--sources', type=str, nargs='*', help='Data sources in format: metadata_dir:image_dir:name')
+    parser.add_argument('--prompt', type=str, default=DEFAULT_PROMPT, help='Prompt template for training')
+    parser.add_argument('--prompt-file', type=str, help='Read prompt from file (overrides --prompt)')
     args = parser.parse_args()
 
     output_file = Path(args.output)
+
+    # Get prompt template
+    if args.prompt_file:
+        with open(args.prompt_file, 'r') as f:
+            prompt_template = f.read().strip()
+        print(f"Loaded prompt from: {args.prompt_file}")
+    else:
+        prompt_template = args.prompt
 
     # Parse data sources
     if args.sources:
@@ -135,15 +154,16 @@ def main():
         data_sources = DEFAULT_DATA_SOURCES
 
     print("=" * 80)
-    print("Converting SPoRC excerpts to Qwen3-VL format")
+    print("Converting SPoRC excerpts to Qwen3-VL format (ALL excerpts with >=1 image)")
     print("=" * 80)
     print(f"Output file: {output_file}")
     print(f"Data sources: {len(data_sources)}")
+    print(f"Prompt: {prompt_template[:80]}...")
     print("-" * 80)
 
     # Process all data sources
     all_qwen_data = []
-    total_stats = {'complete': 0, 'incomplete': 0}
+    total_stats = {i: 0 for i in range(7)}
 
     for metadata_dir, image_dir, name in data_sources:
         metadata_path = Path(metadata_dir)
@@ -162,21 +182,24 @@ def main():
 
         # Load and convert
         excerpts = load_all_metadata(metadata_path, name)
-        qwen_data, stats = convert_to_qwen_format(excerpts, image_path, name)
+        qwen_data, stats = convert_to_qwen_format(excerpts, image_path, name, prompt_template)
 
         all_qwen_data.extend(qwen_data)
-        total_stats['complete'] += stats['complete']
-        total_stats['incomplete'] += stats['incomplete']
+        for i in range(7):
+            total_stats[i] += stats[i]
 
     # Summary
     print("\n" + "=" * 80)
     print("SUMMARY")
     print("=" * 80)
-    print(f"Total complete excerpts: {total_stats['complete']}")
-    print(f"Total incomplete excerpts: {total_stats['incomplete']}")
-    if total_stats['complete'] + total_stats['incomplete'] > 0:
-        rate = total_stats['complete'] / (total_stats['complete'] + total_stats['incomplete']) * 100
-        print(f"Success rate: {rate:.2f}%")
+    total_included = sum(total_stats[i] for i in range(1, 7))
+    print(f"Total excerpts included: {total_included}")
+    print("By image count:")
+    for i in range(6, 0, -1):
+        if total_stats[i] > 0:
+            print(f"  {i} images: {total_stats[i]}")
+    if total_stats[0] > 0:
+        print(f"  0 images (skipped): {total_stats[0]}")
 
     # Save to output file
     output_file.parent.mkdir(parents=True, exist_ok=True)
