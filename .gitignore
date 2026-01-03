@@ -6,7 +6,6 @@ __pycache__/
 .Python
 
 # Model checkpoints and training outputs
-finetuned_models/
 checkpoints/
 runs/
 
