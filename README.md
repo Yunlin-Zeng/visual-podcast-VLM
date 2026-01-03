@@ -21,7 +21,6 @@ We present a novel pipeline for **end-to-end visual podcast generation** that tr
 | Avg. Turn Length | **57.5** | 38.0 | +51% |
 | Switch Rate (/1k words) | **16.0** | 27.0 | -41% |
 | AI-Judge Win Rate | **>80%** | - | - |
-| Inference Speed | 1.8x faster | baseline | - |
 
 Our fine-tuned 32B model achieves >80% win rate against the 235B base model in AI-as-a-Judge evaluations (Gemini 3 Pro, Claude Opus 4.5, GPT 5.2) while maintaining identical visual grounding (CLIPScore).
 
