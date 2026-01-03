@@ -134,7 +134,24 @@ without introductions or sign-offs. The word count should be around 800 words.
 | Model | Description | Download |
 |-------|-------------|----------|
 | Qwen3-VL-32B (Base) | Base model | [HuggingFace](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) |
-| Qwen3-VL-32B (Fine-tuned) | LoRA adapter for podcast generation | Coming soon |
+| Qwen3-VL-32B (Fine-tuned) | LoRA adapter for podcast generation | [finetuned_models/](finetuned_models/2025-11-28_qwen3vl-32b-sporc-v3/) |
+
+### Using the Fine-tuned LoRA Adapter
+
+The LoRA adapter is split into multiple parts. To use it:
+
+```bash
+# 1. Concatenate the split files
+cd finetuned_models/2025-11-28_qwen3vl-32b-sporc-v3/
+cat checkpoint-126_part_* > checkpoint-126.zip
+unzip checkpoint-126.zip
+
+# 2. Run inference with the LoRA adapter
+cd ../../scripts_yunlin
+python inference.py --mode interactive \
+    --model-path /path/to/qwen3-vl-32b \
+    --lora-adapter ../finetuned_models/2025-11-28_qwen3vl-32b-sporc-v3/checkpoint-126
+```
 
 ## Citation
 
