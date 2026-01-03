@@ -1,0 +1,7 @@
+Metric,32B_Finetuned,235B_Base,Difference
+Word Count,972.1,918.6,+53.5
+Distinct-2 (Lexical Diversity),0.8152,0.8536,-0.0384
+Avg Turn Length (words),57.5,38.0,+19.4
+Switch Rate (per 1000 words),16.0,27.0,-11.0
+Number of Turns,15.8,24.5,-8.7
+CLIPScore (Visual Grounding),20.39,20.39,+0.00
