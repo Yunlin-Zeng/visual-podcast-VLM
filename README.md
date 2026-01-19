@@ -61,27 +61,55 @@ pip install flash_attn==2.7.4.post1
 
 ## Dataset Generation
 
-The dataset generation pipeline uses AWS Bedrock for both text extraction (Claude Sonnet 4.5) and image generation (Stable Diffusion 3.5).
+The dataset generation pipeline uses AWS Bedrock for both text extraction (Claude Sonnet 4.5) and image generation (Stable Diffusion 3.5). This produces ~4,000 training samples, each containing a podcast dialogue excerpt paired with 5 synthetic images.
 
 ### Prerequisites
 
-1. AWS credentials with Bedrock access
-2. Access to SPoRC podcast transcripts
+1. AWS credentials with Bedrock access (Claude Sonnet 4.5 and Stable Diffusion 3.5)
+2. Download the [SPoRC dataset](https://github.com/spotify-research/sporc) (`episodeLevelDataSample.jsonl.gz`)
 
 ### Pipeline Overview
 
 1. **Excerpt Extraction**: Claude Sonnet 4.5 identifies 600-800 word excerpts with rich visual descriptions from podcast transcripts
-2. **Scene Generation**: For each excerpt, generate 5 detailed image prompts
-3. **Image Synthesis**: Stable Diffusion 3.5 renders the prompts into images
+2. **Scene Generation**: For each excerpt, generate 5 detailed image prompts describing visual moments
+3. **Image Synthesis**: Stable Diffusion 3.5 renders the prompts into photorealistic 16:9 images
+
+### Running the Pipeline
 
 ```bash
+cd scripts_bedrock
+
 # Set AWS credentials
 export AWS_BEARER_TOKEN_BEDROCK="your_token_here"
 
-# Run the dataset generation pipeline
-cd scripts_bedrock
-python generate_dataset.py
+# Run the full pipeline (excerpt extraction + image generation)
+python generate_dataset.py \
+    --dataset /path/to/episodeLevelDataSample.jsonl.gz \
+    --output ./dataset_output \
+    --workers 4
+
+# Or run steps separately:
+# Step 1: Extract excerpts only
+python extract_excerpts.py --dataset /path/to/sporc.jsonl.gz --output ./excerpts/
+
+# Step 2: Generate images for extracted excerpts
+python generate_images.py --input ./excerpts/ --output ./images/
 ```
+
+### Output Format
+
+Each sample produces a directory with:
+```
+sample_001/
+├── excerpt.json     # Dialogue text + metadata
+├── image_1.png      # 5 synthetic images (16:9, photorealistic)
+├── image_2.png
+├── image_3.png
+├── image_4.png
+└── image_5.png
+```
+
+See `scripts_bedrock/example_complete.json` for the expected JSON format.
 
 ## Training
 
