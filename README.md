@@ -4,7 +4,7 @@
 
 This repository contains the code to reproduce the data generation pipeline and model training for visual podcast generation using Qwen3-VL.
 
-[[Paper (arXiv)]](https://arxiv.org/abs/XXXX.XXXXX) | [[WACV 2026 Workshop]](https://wacv2026-image-quality-workshop.github.io/)
+[[Paper (arXiv)]](https://arxiv.org/abs/2601.01062) | [[WACV 2026 Workshop]](https://wacv2026-image-quality-workshop.github.io/)
 
 ## Overview
 
@@ -158,11 +158,14 @@ python inference.py --mode interactive \
 If you find this work useful, please cite:
 
 ```bibtex
-@inproceedings{zeng2026sporc,
-  title={SPoRC-VIST: A Benchmark for Evaluating Generative Natural Narrative in Vision-Language Models},
-  author={Zeng, Yunlin},
-  booktitle={IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) Workshops},
-  year={2026}
+@misc{zeng2026sporcvistbenchmarkevaluatinggenerative,
+      title={SPoRC-VIST: A Benchmark for Evaluating Generative Natural Narrative in Vision-Language Models},
+      author={Yunlin Zeng},
+      year={2026},
+      eprint={2601.01062},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2601.01062},
 }
 ```
 
@@ -175,4 +178,4 @@ This work builds upon:
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the PolyForm Small Business License 1.0.0 - see the [LICENSE](LICENSE) file for details.
